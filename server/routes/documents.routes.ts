@@ -8,10 +8,10 @@ import {
   listDocuments,
   getDocument,
   confirmDocumentExtraction,
-} from "../../modules/documents/document.service";
-import { createEntitiesFromExtraction } from "../../modules/entities/entity.service";
-import { createCommitmentsFromExtraction } from "../../modules/commitments/commitment.service";
-import { ExtractionResultSchema } from "../../ai/extraction";
+} from "../../src/modules/documents/document.service";
+import { createEntitiesFromExtraction } from "../../src/modules/entities/entity.service";
+import { createCommitmentsFromExtraction } from "../../src/modules/commitments/commitment.service";
+import { ExtractionResultSchema } from "../../src/ai/extraction";
 import { requireAuth } from "../middleware/auth";
 
 const router = Router();

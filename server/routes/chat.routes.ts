@@ -9,11 +9,11 @@ import {
   touchConversation,
   listConversations,
   getAllMessages,
-} from "../../modules/conversations/conversation.service";
-import { retrieveChunks } from "../../ai/retrieval";
-import { chat, type ChatMessage } from "../../ai/provider";
-import { TOOLS } from "../../ai/tools/registry";
-import { executeTool } from "../../ai/tools/executor";
+} from "../../src/modules/conversations/conversation.service";
+import { retrieveChunks } from "../../src/ai/retrieval";
+import { chat, type ChatMessage } from "../../src/ai/provider";
+import { TOOLS } from "../../src/ai/tools/registry";
+import { executeTool } from "../../src/ai/tools/executor";
 import { requireAuth } from "../middleware/auth";
 
 const router = Router();

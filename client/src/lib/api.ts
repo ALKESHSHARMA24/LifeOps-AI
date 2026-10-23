@@ -10,8 +10,12 @@ class ApiError extends Error {
   }
 }
 
+// In dev: empty string → Vite proxy handles /api/* → Express :4000
+// In prod: set VITE_API_URL=https://your-render-app.onrender.com in Vercel env vars
+const BASE_URL = import.meta.env.VITE_API_URL ?? "";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${BASE_URL}/api${path}`, {
     ...init,
     credentials: "include",
     headers: {
@@ -31,7 +35,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 // Strip Content-Type for multipart/form-data (browser sets boundary automatically)
 async function upload<T>(path: string, formData: FormData): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${BASE_URL}/api${path}`, {
     method: "POST",
     body: formData,
     credentials: "include",

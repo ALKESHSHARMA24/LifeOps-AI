@@ -3,16 +3,18 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "../../db";
-import { users } from "../../db/schema";
+import { db } from "../../src/db";
+import { users } from "../../src/db/schema";
 import { requireAuth } from "../middleware/auth";
 
 const router = Router();
 
+const isProd = process.env.NODE_ENV === "production";
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production",
+  // cross-origin in prod (Vercel → Render), same-site in dev (both localhost)
+  sameSite: isProd ? ("none" as const) : ("lax" as const),
+  secure: isProd, // "none" requires secure:true
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 

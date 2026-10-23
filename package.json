@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
-    "server:dev": "tsx watch src/server/index.ts",
+    "server:dev": "tsx watch server/index.ts",
     "client:dev": "cd client && npm run dev",
     "server:build": "tsc -p tsconfig.server.json",
     "server:start": "node dist/server/server/index.js",

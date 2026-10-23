@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
-import { getDashboardStats, getAttentionItems } from "../../modules/intelligence/attention.service";
-import { getTimelineCommitments } from "../../modules/intelligence/attention.service";
+import { getDashboardStats, getAttentionItems } from "../../src/modules/intelligence/attention.service";
+import { getTimelineCommitments } from "../../src/modules/intelligence/attention.service";
 import { requireAuth } from "../middleware/auth";
 
 const router = Router();

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import { retrieveChunks } from "../../ai/retrieval";
+import { retrieveChunks } from "../../src/ai/retrieval";
 import { requireAuth } from "../middleware/auth";
 
 const router = Router();
