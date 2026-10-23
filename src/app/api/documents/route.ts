@@ -5,6 +5,9 @@ import {
   listDocuments,
 } from "@/modules/documents/document.service";
 
+export const maxDuration = 60; // seconds — Vercel Hobby allows up to 60s
+
+
 // POST /api/documents — Upload and process a document
 export async function POST(req: NextRequest) {
   const session = await auth();

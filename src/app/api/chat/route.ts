@@ -37,6 +37,8 @@ const SendMessageSchema = z.object({
   conversationId: z.string().uuid().optional(),
 });
 
+export const maxDuration = 60; // seconds — Vercel Hobby allows up to 60s
+
 // ─── POST — send a message ────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
