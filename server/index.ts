@@ -16,10 +16,25 @@ const PORT = process.env.PORT || 4000;
 // Trust Render's load balancer so req.secure works and cookies with secure:true are set correctly
 if (process.env.NODE_ENV === "production") app.set("trust proxy", 1);
 
-app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+// Build allowed origins list from CLIENT_URL env var (comma-separated for multiple)
+const rawOrigins = process.env.CLIENT_URL || "http://localhost:5173";
+const allowedOrigins = rawOrigins.split(",").map((o) => o.trim().replace(/\/$/, ""));
+
+const corsOptions: cors.CorsOptions = {
+  origin(requestOrigin, callback) {
+    // Allow requests with no origin (curl, Postman, server-to-server)
+    if (!requestOrigin) return callback(null, true);
+    if (allowedOrigins.includes(requestOrigin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${requestOrigin} not allowed`));
+  },
   credentials: true,
-}));
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
+app.use(cors(corsOptions));
+// Handle preflight OPTIONS requests for all routes
+app.options("*", cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 
