@@ -13,9 +13,8 @@ interface DocumentDetail {
   status: string;
   fileName: string;
   createdAt: string;
-  extraction?: {
-    extractedData: Record<string, unknown> | null;
-  };
+  // extractedData is a flat field on the document (jsonb column in DB)
+  extractedData: Record<string, unknown> | null;
 }
 
 export function DocumentDetailPage() {
@@ -35,12 +34,12 @@ export function DocumentDetailPage() {
   }, [id]);
 
   const handleConfirm = async () => {
-    if (!doc?.extraction?.extractedData) return;
+    if (!doc?.extractedData) return;
     setConfirming(true);
     setError("");
     try {
       const { document } = await api.post<{ document: DocumentDetail }>(`/documents/${id}/confirm`, {
-        extractedData: doc.extraction.extractedData,
+        extractedData: doc.extractedData,
       });
       setDoc(document);
     } catch (err) {
@@ -69,7 +68,7 @@ export function DocumentDetailPage() {
     );
   }
 
-  const extractedData = doc.extraction?.extractedData;
+  const extractedData = doc.extractedData;
 
   return (
     <div className="p-8 space-y-6 max-w-3xl">
@@ -94,7 +93,7 @@ export function DocumentDetailPage() {
         </div>
       )}
 
-      {/* AI Extraction — show if extracted and pending confirmation */}
+      {/* AI Extraction — review & confirm */}
       {doc.status === "extracted" && extractedData && (
         <Card>
           <CardHeader>
@@ -104,21 +103,19 @@ export function DocumentDetailPage() {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <pre className="text-xs bg-muted rounded-md p-4 overflow-auto max-h-96">
-              {JSON.stringify(extractedData, null, 2)}
-            </pre>
+            <ExtractionPreview data={extractedData} />
             <Button onClick={handleConfirm} disabled={confirming}>
               {confirming ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Confirming…</>
               ) : (
-                <><CheckCircle className="h-4 w-4 mr-2" /> Confirm Extraction</>
+                <><CheckCircle className="h-4 w-4 mr-2" /> Confirm & Save</>
               )}
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {/* Already indexed */}
+      {/* Indexed / confirmed */}
       {(doc.status === "indexed" || doc.status === "validated") && (
         <Card>
           <CardContent className="py-6 flex items-center gap-3 text-green-700">
@@ -126,7 +123,7 @@ export function DocumentDetailPage() {
             <div>
               <p className="font-medium">Document indexed and ready</p>
               <p className="text-sm text-muted-foreground mt-0.5">
-                This document is searchable and available for AI chat queries.
+                Searchable and available for AI chat queries.
               </p>
             </div>
           </CardContent>
@@ -143,15 +140,86 @@ export function DocumentDetailPage() {
         </Card>
       )}
 
+      {/* Show extracted data on confirmed/indexed docs too */}
       {extractedData && doc.status !== "extracted" && (
         <Card>
           <CardHeader><CardTitle className="text-base">Extracted Data</CardTitle></CardHeader>
           <CardContent>
-            <pre className="text-xs bg-muted rounded-md p-4 overflow-auto max-h-96">
-              {JSON.stringify(extractedData, null, 2)}
-            </pre>
+            <ExtractionPreview data={extractedData} />
           </CardContent>
         </Card>
+      )}
+    </div>
+  );
+}
+
+// Renders extracted fields in a human-readable way instead of raw JSON
+function ExtractionPreview({ data }: { data: Record<string, unknown> }) {
+  const title = data.title as string | undefined;
+  const summary = data.summary as string | undefined;
+  const category = data.category as string | undefined;
+  const dates = data.dates as Array<{ date: string; label: string; type: string; isImportant: boolean }> | undefined;
+  const entities = data.entities as Array<{ name: string; type: string; role?: string }> | undefined;
+  const amounts = data.amounts as Array<{ value: number; currency: string; label: string }> | undefined;
+
+  return (
+    <div className="space-y-4 text-sm">
+      {title && (
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Title</p>
+          <p className="font-medium">{title}</p>
+        </div>
+      )}
+      {summary && (
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Summary</p>
+          <p className="text-muted-foreground leading-relaxed">{summary}</p>
+        </div>
+      )}
+      {category && (
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Category</p>
+          <p className="capitalize">{category}</p>
+        </div>
+      )}
+      {dates && dates.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Important Dates</p>
+          <div className="space-y-1">
+            {dates.map((d, i) => (
+              <div key={i} className="flex items-center justify-between rounded bg-muted px-3 py-2">
+                <span>{d.label}</span>
+                <span className="font-medium">{d.date}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {amounts && amounts.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Amounts</p>
+          <div className="space-y-1">
+            {amounts.map((a, i) => (
+              <div key={i} className="flex items-center justify-between rounded bg-muted px-3 py-2">
+                <span>{a.label}</span>
+                <span className="font-medium">{a.currency} {a.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {entities && entities.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Entities</p>
+          <div className="space-y-1">
+            {entities.map((e, i) => (
+              <div key={i} className="flex items-center justify-between rounded bg-muted px-3 py-2">
+                <span>{e.name}</span>
+                <span className="text-muted-foreground capitalize">{e.role ?? e.type}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
