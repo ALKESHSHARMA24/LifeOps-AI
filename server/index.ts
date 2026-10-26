@@ -10,6 +10,8 @@ import searchRoutes from "./routes/search.routes";
 import chatRoutes from "./routes/chat.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import ocrRoutes from "./routes/ocr.routes";
+import reminderRoutes from "./routes/reminders.routes";
+import { startReminderJob } from "./jobs/reminders.job";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -49,6 +51,7 @@ app.use("/api/search", searchRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/ocr", ocrRoutes);
+app.use("/api/reminders", reminderRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -56,4 +59,5 @@ app.get("/api/health", (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`LifeOps server running on http://localhost:${PORT}`);
+  startReminderJob();
 });

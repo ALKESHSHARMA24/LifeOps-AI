@@ -9,6 +9,7 @@ import { DocumentDetailPage } from "@/pages/documents/DocumentDetailPage";
 import { ChatPage } from "@/pages/chat/ChatPage";
 import { TimelinePage } from "@/pages/timeline/TimelinePage";
 import { SearchPage } from "@/pages/search/SearchPage";
+import { RemindersPage } from "@/pages/reminders/RemindersPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/timeline" element={<TimelinePage />} />
         <Route path="/search" element={<SearchPage />} />
+        <Route path="/reminders" element={<RemindersPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

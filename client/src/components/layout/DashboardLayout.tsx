@@ -8,6 +8,7 @@ import {
   Search,
   LogOut,
   Brain,
+  Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", end: true },
   { to: "/documents", icon: FileText, label: "Documents" },
   { to: "/chat", icon: MessageSquare, label: "Chat" },
+  { to: "/reminders", icon: Bell, label: "Reminders" },
   { to: "/timeline", icon: Calendar, label: "Timeline" },
   { to: "/search", icon: Search, label: "Search" },
 ];
