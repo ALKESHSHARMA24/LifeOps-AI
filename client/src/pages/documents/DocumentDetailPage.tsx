@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, CheckCircle, Loader2, AlertCircle, FileText } from "lucide-react";
+import { ArrowLeft, CheckCircle, Loader2, AlertCircle, FileText, ScanText, Copy, ChevronDown, ChevronUp } from "lucide-react";
 
 interface DocumentDetail {
   id: string;
@@ -24,6 +24,10 @@ export function DocumentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
+  const [ocrText, setOcrText] = useState<string | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrError, setOcrError] = useState("");
+  const [ocrExpanded, setOcrExpanded] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -32,6 +36,24 @@ export function DocumentDetailPage() {
       .catch(() => setError("Document not found"))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const handleOcr = async () => {
+    setOcrLoading(true);
+    setOcrError("");
+    setOcrExpanded(true);
+    try {
+      const res = await api.get<{ text: string; source: string }>(`/ocr/${id}`);
+      setOcrText(res.text);
+    } catch (err) {
+      setOcrError(err instanceof Error ? err.message : "OCR failed");
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const handleCopyOcr = () => {
+    if (ocrText) navigator.clipboard.writeText(ocrText);
+  };
 
   const handleConfirm = async () => {
     if (!doc?.extractedData) return;
@@ -149,6 +171,59 @@ export function DocumentDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* OCR — Raw Text */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ScanText className="h-4 w-4" /> Raw Text (OCR)
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {ocrText && (
+                <Button variant="ghost" size="sm" onClick={handleCopyOcr} title="Copy to clipboard">
+                  <Copy className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={ocrText ? () => setOcrExpanded((v) => !v) : handleOcr}
+                disabled={ocrLoading}
+              >
+                {ocrLoading ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Running OCR…</>
+                ) : ocrText ? (
+                  ocrExpanded ? (
+                    <><ChevronUp className="h-4 w-4 mr-2" /> Hide</>
+                  ) : (
+                    <><ChevronDown className="h-4 w-4 mr-2" /> View</>
+                  )
+                ) : (
+                  <><ScanText className="h-4 w-4 mr-2" /> Run OCR</>
+                )}
+              </Button>
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Extract the raw text from your document using AI vision.
+          </p>
+        </CardHeader>
+        {ocrExpanded && (
+          <CardContent>
+            {ocrError && (
+              <div className="flex items-center gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive mb-3">
+                <AlertCircle className="h-4 w-4 shrink-0" /> {ocrError}
+              </div>
+            )}
+            {ocrText && (
+              <pre className="max-h-96 overflow-y-auto rounded-md bg-muted px-4 py-3 text-xs whitespace-pre-wrap break-words font-mono leading-relaxed">
+                {ocrText}
+              </pre>
+            )}
+          </CardContent>
+        )}
+      </Card>
     </div>
   );
 }

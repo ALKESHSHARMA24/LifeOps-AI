@@ -9,6 +9,7 @@ import documentRoutes from "./routes/documents.routes";
 import searchRoutes from "./routes/search.routes";
 import chatRoutes from "./routes/chat.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
+import ocrRoutes from "./routes/ocr.routes";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -47,6 +48,7 @@ app.use("/api/documents", documentRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/ocr", ocrRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

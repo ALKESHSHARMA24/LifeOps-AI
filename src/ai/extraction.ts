@@ -11,6 +11,7 @@
 
 import { z } from "zod";
 import { generateJSON, isProviderConfigured } from "./provider";
+import { ocrScannedPdf } from "./ocr";
 import {
   EXTRACTION_SYSTEM_PROMPT,
   EXTRACTION_USER_PROMPT,
@@ -106,13 +107,18 @@ export async function extractDocumentData(
       rawText = await extractTextFromPDF(input.buffer);
 
       if (!rawText.trim()) {
-        return {
-          success: false,
-          data: null,
-          rawText: "",
-          error: "Could not extract text from this PDF. It may be a scanned image.",
-          model: "pdf-parse",
-        };
+        // Scanned/image-based PDF — fall back to vision OCR
+        const ocr = await ocrScannedPdf(input.buffer);
+        if (!ocr.success || !ocr.text.trim()) {
+          return {
+            success: false,
+            data: null,
+            rawText: "",
+            error: ocr.error ?? "Could not extract text from this PDF. It may be a scanned image with no readable text.",
+            model: ocr.method,
+          };
+        }
+        rawText = ocr.text;
       }
 
       // Truncate to ~12k chars to avoid blowing the context window
