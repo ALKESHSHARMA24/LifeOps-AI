@@ -4,7 +4,23 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, CheckCircle, Loader2, AlertCircle, FileText, ScanText, Copy, ChevronDown, ChevronUp } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, CheckCircle, Loader2, AlertCircle, FileText, ScanText, Copy, ChevronDown, ChevronUp, Pencil, X, Plus, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface DateEntry { label: string; date: string; type: string; isImportant: boolean }
+interface Entity { name: string; type: string; role?: string | null }
+interface Amount { label: string; value: number; currency: string }
+
+interface ExtractedData {
+  title?: string;
+  summary?: string;
+  category?: string;
+  dates?: DateEntry[];
+  entities?: Entity[];
+  amounts?: Amount[];
+  [key: string]: unknown;
+}
 
 interface DocumentDetail {
   id: string;
@@ -13,8 +29,7 @@ interface DocumentDetail {
   status: string;
   fileName: string;
   createdAt: string;
-  // extractedData is a flat field on the document (jsonb column in DB)
-  extractedData: Record<string, unknown> | null;
+  extractedData: ExtractedData | null;
 }
 
 export function DocumentDetailPage() {
@@ -29,12 +44,39 @@ export function DocumentDetailPage() {
   const [ocrError, setOcrError] = useState("");
   const [ocrExpanded, setOcrExpanded] = useState(false);
 
+  // Edit state — a mutable copy of extractedData while editing
+  const [editMode, setEditMode] = useState(false);
+  const [draft, setDraft] = useState<ExtractedData | null>(null);
+
   useEffect(() => {
     if (!id) return;
-    api.get<{ document: DocumentDetail }>(`/documents/${id}`)
-      .then(({ document }) => setDoc(document))
-      .catch(() => setError("Document not found"))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const fetchDoc = (isInitial = false) => {
+      api.get<{ document: DocumentDetail }>(`/documents/${id}`)
+        .then(({ document }) => {
+          if (cancelled) return;
+          setDoc(document);
+          // Keep polling while the server is still working on it
+          if (document.status === "processing" || document.status === "uploaded") {
+            pollTimer = setTimeout(() => fetchDoc(), 3000);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setError("Document not found");
+        })
+        .finally(() => {
+          if (isInitial && !cancelled) setLoading(false);
+        });
+    };
+
+    fetchDoc(true);
+
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
   }, [id]);
 
   const handleOcr = async () => {
@@ -56,19 +98,33 @@ export function DocumentDetailPage() {
   };
 
   const handleConfirm = async () => {
-    if (!doc?.extractedData) return;
+    const dataToSave = editMode ? draft : doc?.extractedData;
+    if (!dataToSave) return;
     setConfirming(true);
     setError("");
     try {
       const { document } = await api.post<{ document: DocumentDetail }>(`/documents/${id}/confirm`, {
-        extractedData: doc.extractedData,
+        extractedData: dataToSave,
       });
       setDoc(document);
+      setEditMode(false);
+      setDraft(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Confirmation failed");
     } finally {
       setConfirming(false);
     }
+  };
+
+  const startEdit = () => {
+    if (!doc?.extractedData) return;
+    setDraft(JSON.parse(JSON.stringify(doc.extractedData)));
+    setEditMode(true);
+  };
+
+  const cancelEdit = () => {
+    setDraft(null);
+    setEditMode(false);
   };
 
   if (loading) {
@@ -115,17 +171,34 @@ export function DocumentDetailPage() {
         </div>
       )}
 
-      {/* AI Extraction — review & confirm */}
+      {/* AI Extraction — review & confirm (with edit) */}
       {doc.status === "extracted" && extractedData && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">AI Extraction — Review & Confirm</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              LifeOps has extracted the following data. Review it and confirm to save entities and deadlines.
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">AI Extraction — Review & Confirm</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Review the extracted data. Edit any incorrect fields before confirming.
+                </p>
+              </div>
+              {!editMode ? (
+                <Button variant="outline" size="sm" onClick={startEdit}>
+                  <Pencil className="h-4 w-4 mr-2" /> Edit
+                </Button>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={cancelEdit}>
+                  <X className="h-4 w-4 mr-2" /> Cancel
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <ExtractionPreview data={extractedData} />
+            {editMode && draft ? (
+              <ExtractionEditor draft={draft} onChange={setDraft} />
+            ) : (
+              <ExtractionPreview data={extractedData} />
+            )}
             <Button onClick={handleConfirm} disabled={confirming}>
               {confirming ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Confirming…</>
@@ -228,14 +301,10 @@ export function DocumentDetailPage() {
   );
 }
 
-// Renders extracted fields in a human-readable way instead of raw JSON
-function ExtractionPreview({ data }: { data: Record<string, unknown> }) {
-  const title = data.title as string | undefined;
-  const summary = data.summary as string | undefined;
-  const category = data.category as string | undefined;
-  const dates = data.dates as Array<{ date: string; label: string; type: string; isImportant: boolean }> | undefined;
-  const entities = data.entities as Array<{ name: string; type: string; role?: string }> | undefined;
-  const amounts = data.amounts as Array<{ value: number; currency: string; label: string }> | undefined;
+// ─── Read-only preview ────────────────────────────────────────────────────────
+
+function ExtractionPreview({ data }: { data: ExtractedData }) {
+  const { title, summary, category, dates, entities, amounts } = data;
 
   return (
     <div className="space-y-4 text-sm">
@@ -296,6 +365,122 @@ function ExtractionPreview({ data }: { data: Record<string, unknown> }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Editable form ────────────────────────────────────────────────────────────
+
+function ExtractionEditor({ draft, onChange }: { draft: ExtractedData; onChange: (d: ExtractedData) => void }) {
+  const set = (key: keyof ExtractedData, value: unknown) => onChange({ ...draft, [key]: value });
+
+  const updateDate = (i: number, field: keyof DateEntry, value: string) => {
+    const dates = [...(draft.dates ?? [])];
+    dates[i] = { ...dates[i], [field]: value };
+    set("dates", dates);
+  };
+  const removeDate = (i: number) => set("dates", draft.dates?.filter((_, idx) => idx !== i));
+  const addDate = () => set("dates", [...(draft.dates ?? []), { label: "", date: "", type: "other", isImportant: false }]);
+
+  const updateAmount = (i: number, field: keyof Amount, value: string | number) => {
+    const amounts = [...(draft.amounts ?? [])];
+    amounts[i] = { ...amounts[i], [field]: value };
+    set("amounts", amounts);
+  };
+  const removeAmount = (i: number) => set("amounts", draft.amounts?.filter((_, idx) => idx !== i));
+  const addAmount = () => set("amounts", [...(draft.amounts ?? []), { label: "", value: 0, currency: "INR" }]);
+
+  const updateEntity = (i: number, field: keyof Entity, value: string) => {
+    const entities = [...(draft.entities ?? [])];
+    entities[i] = { ...entities[i], [field]: value };
+    set("entities", entities);
+  };
+  const removeEntity = (i: number) => set("entities", draft.entities?.filter((_, idx) => idx !== i));
+  const addEntity = () => set("entities", [...(draft.entities ?? []), { name: "", type: "other", role: "" }]);
+
+  return (
+    <div className="space-y-5 text-sm">
+      {/* Title */}
+      <div>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Title</label>
+        <Input value={draft.title ?? ""} onChange={(e) => set("title", e.target.value)} placeholder="Document title" />
+      </div>
+
+      {/* Category */}
+      <div>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Category</label>
+        <Input value={draft.category ?? ""} onChange={(e) => set("category", e.target.value)} placeholder="e.g. insurance, vehicle, finance" />
+      </div>
+
+      {/* Summary */}
+      <div>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Summary</label>
+        <textarea
+          value={draft.summary ?? ""}
+          onChange={(e) => set("summary", e.target.value)}
+          rows={3}
+          placeholder="Brief summary of the document"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+        />
+      </div>
+
+      {/* Dates */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Important Dates</p>
+          <Button type="button" variant="ghost" size="sm" onClick={addDate}><Plus className="h-3 w-3 mr-1" /> Add</Button>
+        </div>
+        <div className="space-y-2">
+          {(draft.dates ?? []).map((d, i) => (
+            <div key={i} className={cn("grid grid-cols-[1fr_1fr_auto] gap-2 rounded bg-muted p-2")}>
+              <Input value={d.label} onChange={(e) => updateDate(i, "label", e.target.value)} placeholder="Label (e.g. Expiry)" />
+              <Input value={d.date} onChange={(e) => updateDate(i, "date", e.target.value)} placeholder="Date (e.g. 2025-12-31)" />
+              <Button type="button" variant="ghost" size="icon" onClick={() => removeDate(i)} className="text-destructive hover:text-destructive">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Amounts */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amounts</p>
+          <Button type="button" variant="ghost" size="sm" onClick={addAmount}><Plus className="h-3 w-3 mr-1" /> Add</Button>
+        </div>
+        <div className="space-y-2">
+          {(draft.amounts ?? []).map((a, i) => (
+            <div key={i} className="grid grid-cols-[1fr_80px_80px_auto] gap-2 rounded bg-muted p-2">
+              <Input value={a.label} onChange={(e) => updateAmount(i, "label", e.target.value)} placeholder="Label" />
+              <Input type="number" value={a.value} onChange={(e) => updateAmount(i, "value", parseFloat(e.target.value) || 0)} placeholder="Amount" />
+              <Input value={a.currency} onChange={(e) => updateAmount(i, "currency", e.target.value)} placeholder="INR" />
+              <Button type="button" variant="ghost" size="icon" onClick={() => removeAmount(i)} className="text-destructive hover:text-destructive">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Entities */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Entities</p>
+          <Button type="button" variant="ghost" size="sm" onClick={addEntity}><Plus className="h-3 w-3 mr-1" /> Add</Button>
+        </div>
+        <div className="space-y-2">
+          {(draft.entities ?? []).map((e, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 rounded bg-muted p-2">
+              <Input value={e.name} onChange={(ev) => updateEntity(i, "name", ev.target.value)} placeholder="Name" />
+              <Input value={e.role ?? e.type} onChange={(ev) => updateEntity(i, "role", ev.target.value)} placeholder="Role / type" />
+              <Button type="button" variant="ghost" size="icon" onClick={() => removeEntity(i)} className="text-destructive hover:text-destructive">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

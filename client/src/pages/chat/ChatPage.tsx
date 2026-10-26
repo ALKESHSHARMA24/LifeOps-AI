@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Send, Plus, Wrench, MessageSquare } from "lucide-react";
+import { Send, Plus, Wrench, MessageSquare, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Message {
@@ -21,6 +21,14 @@ interface Conversation {
   updatedAt: string;
 }
 
+// Extend window type for browser Speech Recognition
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition;
+    webkitSpeechRecognition: new () => SpeechRecognition;
+  }
+}
+
 export function ChatPage() {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -28,19 +36,54 @@ export function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const startListening = () => {
+    const SpeechRecognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceError("Voice input is not supported in this browser.");
+      return;
+    }
+    setVoiceError("");
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-IN";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+    };
+    recognition.onerror = (event) => {
+      setVoiceError(`Voice error: ${event.error}`);
+      setListening(false);
+    };
+    recognition.onend = () => setListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
+  };
+
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    setListening(false);
+  };
 
   useEffect(() => {
     api.get<{ conversations: Conversation[] }>("/chat")
       .then(({ conversations }) => setConversations(conversations))
-      .catch(() => {});
+      .catch((err) => console.error("Failed to load conversations:", err));
   }, []);
 
   useEffect(() => {
     if (!activeConvId) return;
     api.get<{ messages: Message[] }>(`/chat/${activeConvId}`)
       .then(({ messages }) => setMessages(messages))
-      .catch(() => {});
+      .catch((err) => console.error("Failed to load messages:", err));
   }, [activeConvId]);
 
   useEffect(() => {
@@ -174,7 +217,10 @@ export function ChatPage() {
         </div>
 
         {/* Input bar */}
-        <div className="border-t p-4">
+        <div className="border-t p-4 space-y-2">
+          {voiceError && (
+            <p className="text-xs text-destructive">{voiceError}</p>
+          )}
           <form
             onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
             className="flex gap-2"
@@ -182,10 +228,19 @@ export function ChatPage() {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about your documents…"
+              placeholder={listening ? "Listening…" : "Ask about your documents…"}
               disabled={sending}
-              className="flex-1"
+              className={cn("flex-1", listening && "border-primary ring-1 ring-primary")}
             />
+            <Button
+              type="button"
+              variant={listening ? "destructive" : "outline"}
+              onClick={listening ? stopListening : startListening}
+              disabled={sending}
+              title={listening ? "Stop recording" : "Speak your message"}
+            >
+              {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
             <Button type="submit" disabled={sending || !input.trim()}>
               <Send className="h-4 w-4" />
             </Button>

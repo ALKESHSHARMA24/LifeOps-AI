@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Upload, Loader2, AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Document {
   id: string;
@@ -28,21 +29,20 @@ export function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchDocs = () => {
     api.get<{ documents: Document[] }>("/documents")
       .then(({ documents }) => setDocuments(documents))
-      .catch(() => {});
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load documents"));
   };
 
   useEffect(() => {
     fetchDocs();
   }, []);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const uploadFile = useCallback(async (file: File) => {
     setError("");
     setUploading(true);
     try {
@@ -56,6 +56,23 @@ export function DocumentsPage() {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  }, []);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
+      setError("Only PDF and image files are supported.");
+      return;
+    }
+    uploadFile(file);
   };
 
   return (
@@ -74,6 +91,34 @@ export function DocumentsPage() {
         </div>
       </div>
 
+      {/* Drag-and-drop zone */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => !uploading && fileInputRef.current?.click()}
+        className={cn(
+          "flex flex-col items-center justify-center rounded-lg border-2 border-dashed py-10 cursor-pointer transition-colors",
+          dragOver
+            ? "border-primary bg-primary/5"
+            : "border-muted-foreground/30 hover:border-primary/50 hover:bg-accent/30",
+          uploading && "pointer-events-none opacity-60"
+        )}
+      >
+        {uploading ? (
+          <>
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-3" />
+            <p className="text-sm text-muted-foreground">Processing document…</p>
+          </>
+        ) : (
+          <>
+            <Upload className="h-8 w-8 text-muted-foreground mb-3" />
+            <p className="text-sm font-medium">Drop a PDF or image here</p>
+            <p className="text-xs text-muted-foreground mt-1">or click to browse</p>
+          </>
+        )}
+      </div>
+
       {error && (
         <div className="flex items-center gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0" />
@@ -81,16 +126,16 @@ export function DocumentsPage() {
         </div>
       )}
 
-      {documents.length === 0 ? (
+      {documents.length === 0 && !uploading ? (
         <Card>
-          <CardContent className="py-16 text-center">
+          <CardContent className="py-10 text-center">
             <FileText className="mx-auto h-10 w-10 text-muted-foreground mb-4" />
             <p className="text-lg font-medium">No documents yet</p>
             <p className="text-muted-foreground mt-1">Upload your first document to get started</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 flex flex-col">
           {documents.map((doc) => {
             const status = statusBadge[doc.status] ?? { label: doc.status, variant: "secondary" as const };
             return (

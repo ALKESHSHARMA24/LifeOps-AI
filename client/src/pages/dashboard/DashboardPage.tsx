@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, AlertTriangle, Clock, CheckCircle, MessageSquare } from "lucide-react";
+import { FileText, AlertTriangle, Clock, CheckCircle, MessageSquare, AlertCircle } from "lucide-react";
 
 interface Stats {
   totalDocuments: number;
@@ -39,6 +39,7 @@ export function DashboardPage() {
   const { user } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const [attention, setAttention] = useState<AttentionItem[]>([]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     api.get<{ stats: Stats; attention: AttentionItem[] }>("/dashboard")
@@ -46,7 +47,7 @@ export function DashboardPage() {
         setStats(stats);
         setAttention(attention);
       })
-      .catch(() => {});
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load dashboard"));
   }, []);
 
   return (
@@ -55,6 +56,12 @@ export function DashboardPage() {
         <h1 className="text-2xl font-bold">{greeting()}, {user?.name?.split(" ")[0]} 👋</h1>
         <p className="text-muted-foreground mt-1">Here's what needs your attention today.</p>
       </div>
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+        </div>
+      )}
 
       {/* Stats grid */}
       {stats && (

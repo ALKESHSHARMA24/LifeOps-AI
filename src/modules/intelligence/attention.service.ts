@@ -5,7 +5,7 @@
  * No AI call needed — urgency is calculated from dates and statuses.
  */
 
-import { eq, and, lte, gte, desc, or, asc } from "drizzle-orm";
+import { eq, and, lte, gte, desc, or, asc, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { commitments, documents, reminders } from "@/db/schema";
 
@@ -179,7 +179,9 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
   const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
   const [allDocs, activeComm, upcoming, pending] = await Promise.all([
-    db.select({ id: documents.id }).from(documents).where(eq(documents.userId, userId)),
+    db.select({ id: documents.id }).from(documents).where(
+      and(eq(documents.userId, userId), ne(documents.status, "error"))
+    ),
     db
       .select({ id: commitments.id })
       .from(commitments)
